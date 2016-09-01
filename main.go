@@ -24,16 +24,12 @@ import (
 var (
 	assetsDir   string
 	projectDir  string
-	ignoreGMX   bool
-	dry         bool
 	showVersion bool
 )
 
 func init() {
 	flag.StringVar(&assetsDir, "assets-dir", "assets", "directory to scan for .pyxel files")
 	flag.StringVar(&projectDir, "project-dir", ".", "Game Maker project directory to export into")
-	flag.BoolVar(&ignoreGMX, "ignore-gmx", false, "don't create or modify .gmx files")
-	flag.BoolVar(&dry, "dry", false, "display report of files to be created")
 	flag.BoolVar(&showVersion, "version", false, "display the version of this app")
 }
 
@@ -49,11 +45,10 @@ func main() {
 	a := app.Context{
 		AssetsDir:  assetsDir,
 		ProjectDir: projectDir,
-		IgnoreGMX:  ignoreGMX,
 	}
 
 	// Run app
-	if err := a.Run(dry); err != nil {
+	if err := a.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "%s", err)
 	}
 }

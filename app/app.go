@@ -15,10 +15,15 @@
 package app
 
 import (
+	"archive/zip"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
+	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -29,11 +34,15 @@ const Version = "0.0.1"
 type Context struct {
 	AssetsDir  string
 	ProjectDir string
-	IgnoreGMX  bool
+}
+
+type FileInfo struct {
+	Path string // Path to the file.
+	Name string // Name of file, excluding the extension.
 }
 
 // Run the app
-func (ctx Context) Run(dry bool) error {
+func (ctx Context) Run() error {
 	// Get a list of all pyxel files under the assets dir.
 	files, err := getFiles(ctx.AssetsDir, ".pyxel")
 	if err != nil {
@@ -43,27 +52,58 @@ func (ctx Context) Run(dry bool) error {
 		return err
 	}
 
+	var tileName = regexp.MustCompile(`^tile([0-9]+)\.png$`)
+
 	// For every pyxel file found:
 	for _, f := range files {
-		//   * Open pyxel/docData.json to get name
-		//     - expName = ['settings']['ExportTilesetPanel_prefFileName']
-		//     - gmxFilename = './sprites/$expName.sprite.gmx'
-		//   * Check for a corresponding gmx file
-		//     - If found, read and modify if needed
-		//     - Otherwise, write a new file
-		//   * List files in pyxel
-		//     - for every file prefixed with 'title'
-		//       * re.compile('tile([0-9]+)\.png')
-		//       * copy to sprites/images/$expName_$num.png
-		fmt.Println(f)
+		filepath := fmt.Sprintf("%s/%s.pyxel", f.Path, f.Name)
+		z, err := zip.OpenReader(filepath)
+		if err != nil {
+			// TODO: handle error better than this
+			continue
+		}
+		defer z.Close()
+
+		path := fmt.Sprintf("%s/sprites/images", ctx.ProjectDir)
+		//err = os.MkdirAll(path, 0777)
+		// if err != nil {
+		// 	return err
+		// }
+		// Iterate through files in the archive.
+		for _, zf := range z.File {
+			if tileName.MatchString(zf.Name) {
+				i := tileName.FindStringSubmatch(zf.Name)[1]
+				name := fmt.Sprintf("%s_%s.png", f.Name, i)
+				filepath := fmt.Sprintf("%s/%s", path, name)
+				println(filepath)
+				gmf, err := os.Create(filepath)
+				if err != nil {
+					// TODO: better error handling.
+					fmt.Println(err)
+					continue
+				}
+
+				rc, err := zf.Open()
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				_, err = io.Copy(gmf, rc)
+				if err != nil {
+					log.Fatal(err)
+				}
+				rc.Close()
+
+				gmf.Close()
+			}
+		}
 	}
 
 	return nil
 }
 
-func getFiles(p, ext string) ([]string, error) {
-	var files []string
-
+func getFiles(p, ext string) ([]FileInfo, error) {
+	var files []FileInfo
 	fileList, err := ioutil.ReadDir(p)
 	if err != nil {
 		return files, err
@@ -76,11 +116,14 @@ func getFiles(p, ext string) ([]string, error) {
 			if err != nil {
 				return files, err
 			}
-			files = append(subFiles)
+			if subFiles != nil {
+				files = append(subFiles)
+			}
 		} else if strings.HasSuffix(f.Name(), ext) {
-			files = append(files, fullpath)
+			var extension = filepath.Ext(f.Name())
+			var name = f.Name()[0 : len(f.Name())-len(extension)]
+			files = append(files, FileInfo{Path: p, Name: name})
 		}
 	}
-
 	return files, nil
 }
