@@ -13,7 +13,7 @@ For now, you are required to have the [Go programming language](https://golang.o
 C:\> go get github.com/hurricanerix/pyxel2gm/...
 ```
 
-puxel2gm-export
+pyxel2gm-export
 ---------------
 
 Exports tilesets located in .pyxel files as sprites in a Game Maker Studio
