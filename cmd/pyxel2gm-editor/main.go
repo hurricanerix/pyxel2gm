@@ -1,21 +1,65 @@
+// Copyright 2016 Richard Hawkins (hurricanerix@gmail.com)
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
-func main() {
-	// os.Args[1] should be the full path to the image file to be edited.
-	// Step1: parse filepath for project_dir and filename.
-	// Step2: look in project_dir for .pyxel2gm.conf (contains assets_dir)
-	// Step3: walk assets_dir looking for a pyxel file corresponding to the filename.
-	// Step4: open pyxel edit passing in the pyxel file as a parameter
-	// Step5: monitor pyxel file for changes, when file modified time is updated,
-	//        call export just the modified file.
-	/*
-		f, err := os.Create("test.log")
-		if err != nil {
-			panic(err)
-		}
-		defer f.Close()
+import (
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
 
-		log.SetOutput(f)
-		log.Println(os.Args)
-	*/
+	"github.com/hurricanerix/pyxel2gm/gm"
+	"github.com/hurricanerix/pyxel2gm/pyxel"
+)
+
+func main() {
+	// Split the path provided into projectPath and name.
+	var p string
+	if len(os.Args) == 2 {
+		p = os.Args[1]
+	}
+	parts, err := gm.SplitSpritePath(p)
+	if err != nil {
+		log.Fatal(err)
+	}
+	projectPath := parts[0]
+	name := parts[1]
+
+	// Find the .pyxel file associated with the provided name.
+	assetsDir := "assets"
+	filepath, err := gm.FindAsset(projectPath, assetsDir, name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Open the .pyxel file with the default program (this should be Pyxel Edit).
+	fullpath := fmt.Sprintf("%s\\%s.pyxel", filepath, name)
+	openCMD := fmt.Sprintf("/K %s", fullpath)
+	cmd := exec.Command("cmd", openCMD)
+	err = cmd.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = cmd.Wait()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Export tiles in the .pyxel file into the project as .png.
+	err = pyxel.ExportTiles(filepath, name, projectPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

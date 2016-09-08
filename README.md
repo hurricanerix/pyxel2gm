@@ -41,7 +41,5 @@ pyxel2gm-editor
 This utility maps sprites back to their corresponding .pyxel files and opens
 them with Pyxel Edit.  This allows you to have your external editor in Game
 Maker Studio open Pyxel Edit with the .pyxel file instead of the exported png.
-
-Additionally, as long as the instance of Pyxel Edit launched by this utility is
-open, it will also monitor your assets directory, exporting tiles in .pyxel
-files whenever it sees a last modified date change.
+Once the instance of Pyxel Edit launched by the utility closes, it will export
+the tiles in the opened .pyxel file into the projects "sprites/images" directory.
