@@ -26,11 +26,10 @@ import (
 
 func main() {
 	// Split the path provided into projectPath and name.
-	var p string
-	if len(os.Args) == 2 {
-		p = os.Args[1]
+	if len(os.Args) != 2 {
+		return
 	}
-	parts, err := gm.SplitSpritePath(p)
+	parts, err := gm.SplitSpritePath(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,8 +38,17 @@ func main() {
 
 	// Find the .pyxel file associated with the provided name.
 	assetsDir := "assets"
-	filepath, err := gm.FindAsset(projectPath, assetsDir, name)
-	if err != nil {
+	// TODO: change FindAssets to take assetsPath instead of projectPath + assetsDir.
+	filepath, err := pyxel.FindAsset(projectPath, assetsDir, name)
+	if _, ok := err.(pyxel.FileNotFound); ok {
+		// TODO: GetTiles might need to know if this is a sprite or background.
+		tiles, err := gm.GetTiles(projectPath, name)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// TODO: only pass path to desired pyxel file and tiles.
+		pyxel.Create(projectPath, assetsDir, name, tiles)
+	} else if err != nil {
 		log.Fatal(err)
 	}
 

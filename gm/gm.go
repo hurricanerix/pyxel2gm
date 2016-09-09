@@ -17,53 +17,61 @@ package gm
 
 import (
 	"fmt"
+	"image"
+	_ "image/png" // register PNG format
 	"io/ioutil"
+	"os"
 	"regexp"
+	"strings"
 )
 
 // SplitSpritePath and return the Game Maker Studio project path, and
 // sprite filename (excluding the index and extension).
 func SplitSpritePath(path string) ([]string, error) {
+	// TODO: fix this to work with backgrounds.
 	var pngPath = regexp.MustCompile(`^(.*)[\\/]sprites[\\/]images[\\/](.*)_[0-9]+.png$`)
 	m := pngPath.FindStringSubmatch(path)
+	// NOTE: Check that length is 3 (full string match, path to project, short name of sprite)
 	if len(m) != 3 {
 		return nil, fmt.Errorf("invalid path: %s", path)
 	}
 	return []string{m[1], m[2]}, nil
 }
 
-// FindAsset in assetsDir and return the full path to the directory containing it.
-func FindAsset(projectPath, assetsDir, name string) (string, error) {
-	p := fmt.Sprintf("%s\\%s", projectPath, assetsDir)
-	filepath, err := findAsset(p, name)
-	if err != nil {
-		return "", err
-	}
-	if filepath == "" {
-		return "", fmt.Errorf("file not found: %s.pyxel", name)
-	}
-	return filepath, nil
-}
-
-// findAsset by recursivly searching through directories and compairing names.
-func findAsset(p, name string) (string, error) {
+// GetTiles from sprite returning a slice of Image pointers.
+func GetTiles(projectPath, name string) ([]*image.Image, error) {
+	tiles := []*image.Image{}
+	// TODO: make this work for sprites and backgrounds
+	p := fmt.Sprintf("%s\\sprites\\images", projectPath)
 	fileList, err := ioutil.ReadDir(p)
 	if err != nil {
-		return "", err
+		return tiles, nil
 	}
 	for _, f := range fileList {
-		fullpath := fmt.Sprintf("%s\\%s", p, f.Name())
-		if f.IsDir() {
-			found, err := findAsset(fullpath, name)
-			if err != nil {
-				return "", err
-			}
-			if found != "" {
-				return found, nil
-			}
-		} else if fmt.Sprintf("%s.pyxel", name) == f.Name() {
-			return p, nil
+		// If the file name is not prefixed with name, continue to the next file.
+		if !strings.HasPrefix(f.Name(), name) {
+			continue
 		}
+		fp := fmt.Sprintf("%s\\%s", p, f.Name())
+		img, err := readImage(fp)
+		if err != nil {
+			return nil, err
+		}
+		tiles = append(tiles, img)
 	}
-	return "", nil
+	return tiles, nil
+}
+
+// readImage from filepath and return Image pointer.
+func readImage(filepath string) (*image.Image, error) {
+	fd, err := os.Open(filepath)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+	img, _, err := image.Decode(fd)
+	if err != nil {
+		return nil, err
+	}
+	return &img, nil
 }
