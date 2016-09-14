@@ -28,7 +28,15 @@ import (
 )
 
 // FileNotFound when searching for pyxel file.
-type FileNotFound error
+type FileNotFound struct {
+	MSG        string
+	SearchPath string
+	ShortName  string
+}
+
+func (f FileNotFound) Error() string {
+	return fmt.Sprintf("pyxel2gm: could not locate %s under %s", f.ShortName, f.SearchPath)
+}
 
 // ExportTiles from file at pyxelPath into projectPath.
 func ExportTiles(pyxelPath, pyxelName, projectPath string) error {
@@ -57,8 +65,7 @@ func ExportTiles(pyxelPath, pyxelName, projectPath string) error {
 
 			gmf, err := os.Create(filepath)
 			if err != nil {
-				// TODO: better error handling.
-				fmt.Println(err)
+				log.Println(err)
 				continue
 			}
 
@@ -81,12 +88,13 @@ func ExportTiles(pyxelPath, pyxelName, projectPath string) error {
 }
 
 // Create pyxel file from tiles.
-func Create(projectPath, assetsDir, name string, tiles []*image.Image) error {
+func Create(createPath, shortName string, tiles []*image.Image) error {
 	if len(tiles) < 1 {
 		return fmt.Errorf("can not create image with no tiles")
 	}
 	// Create the archive.
-	filepath := fmt.Sprintf("%s\\%s\\%s.pyxel", projectPath, assetsDir, name)
+	// TODO: use path utils for this.
+	filepath := fmt.Sprintf("%s\\%s.pyxel", createPath, shortName)
 	fd, err := os.Create(filepath)
 	if err != nil {
 		return err
@@ -284,38 +292,34 @@ func createTiles(w *zip.Writer, tiles []*image.Image) (int, int, int, error) {
 	return count, width, height, nil
 }
 
-// FindAsset in assetsDir and return the full path to the directory containing it.
-func FindAsset(projectPath, assetsDir, name string) (string, error) {
-	p := fmt.Sprintf("%s\\%s", projectPath, assetsDir)
-	filepath, err := findAsset(p, name)
-	if err != nil {
-		return "", err
-	}
-	if filepath == "" {
-		return "", fmt.Errorf("file not found: %s.pyxel", name)
-	}
-	return filepath, nil
-}
-
-// findAsset by recursivly searching through directories and compairing names.
-func findAsset(p, name string) (string, error) {
-	fileList, err := ioutil.ReadDir(p)
+// FindAsset shortName in searchPath and return the full path to the directory
+// containing it.
+func FindAsset(searchPath, shortName string) (string, error) {
+	// List files in searchPath
+	fileList, err := ioutil.ReadDir(searchPath)
 	if err != nil {
 		return "", err
 	}
 	for _, f := range fileList {
-		fullpath := fmt.Sprintf("%s\\%s", p, f.Name())
-		if f.IsDir() {
-			found, err := findAsset(fullpath, name)
-			if err != nil {
+		// TODO: use path utils for this.
+		filepath := fmt.Sprintf("%s\\%s", searchPath, f.Name())
+		if !f.IsDir() && fmt.Sprintf("%s.pyxel", shortName) == f.Name() {
+			// File matches, return searchPath
+			return searchPath, nil
+		} else if f.IsDir() {
+			found, err := FindAsset(filepath, shortName)
+			if _, ok := err.(FileNotFound); ok {
+				// Sub directory does not contain a match, continue on to the next file.
+				continue
+			} else if err != nil {
+				// Non-Search related error returned, return it.
 				return "", err
 			}
 			if found != "" {
+				// A match was found, return it.
 				return found, nil
 			}
-		} else if fmt.Sprintf("%s.pyxel", name) == f.Name() {
-			return p, nil
 		}
 	}
-	return "", nil
+	return "", FileNotFound{SearchPath: searchPath, ShortName: shortName}
 }

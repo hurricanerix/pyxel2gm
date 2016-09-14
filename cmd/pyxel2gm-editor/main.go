@@ -25,36 +25,60 @@ import (
 )
 
 func main() {
+
+	/*
+
+		f, err := os.OpenFile("testlogfile", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			t.Fatalf("error opening file: %v", err)
+		}
+		defer f.Close()
+
+		log.SetOutput(f)
+		log.Println("This is a test log entry")
+	*/
+
 	// Split the path provided into projectPath and name.
 	if len(os.Args) != 2 {
 		return
 	}
 	parts, err := gm.SplitSpritePath(os.Args[1])
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	projectPath := parts[0]
-	name := parts[1]
+	shortName := parts[1]
+	logfile := fmt.Sprintf("%s\\pyxel2gm-editor.log", projectPath)
+	f, err := os.OpenFile(logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	log.SetOutput(f)
 
 	// Find the .pyxel file associated with the provided name.
-	assetsDir := "assets"
-	// TODO: change FindAssets to take assetsPath instead of projectPath + assetsDir.
-	filepath, err := pyxel.FindAsset(projectPath, assetsDir, name)
+	assetsDirName := "assets"
+	searchPath := fmt.Sprintf("%s\\%s", projectPath, assetsDirName)
+	pyxelDir, err := pyxel.FindAsset(searchPath, shortName)
 	if _, ok := err.(pyxel.FileNotFound); ok {
 		// TODO: GetTiles might need to know if this is a sprite or background.
-		tiles, err := gm.GetTiles(projectPath, name)
+		tiles, err := gm.GetTiles(projectPath, shortName)
 		if err != nil {
 			log.Fatal(err)
 		}
-		// TODO: only pass path to desired pyxel file and tiles.
-		pyxel.Create(projectPath, assetsDir, name, tiles)
+		pyxelDir = searchPath
+		err = pyxel.Create(pyxelDir, shortName, tiles)
+		if err != nil {
+			log.Fatal(err)
+		}
 	} else if err != nil {
 		log.Fatal(err)
 	}
 
 	// Open the .pyxel file with the default program (this should be Pyxel Edit).
-	fullpath := fmt.Sprintf("%s\\%s.pyxel", filepath, name)
-	openCMD := fmt.Sprintf("/K %s", fullpath)
+	pyxelFile := fmt.Sprintf("%s\\%s.pyxel", pyxelDir, shortName)
+	log.Println(pyxelFile)
+	openCMD := fmt.Sprintf("/K %s", pyxelFile)
 	cmd := exec.Command("cmd", openCMD)
 	err = cmd.Start()
 	if err != nil {
@@ -66,7 +90,7 @@ func main() {
 	}
 
 	// Export tiles in the .pyxel file into the project as .png.
-	err = pyxel.ExportTiles(filepath, name, projectPath)
+	err = pyxel.ExportTiles(pyxelDir, shortName, projectPath)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -31,7 +31,7 @@ func SplitSpritePath(path string) ([]string, error) {
 	// TODO: fix this to work with backgrounds.
 	var pngPath = regexp.MustCompile(`^(.*)[\\/]sprites[\\/]images[\\/](.*)_[0-9]+.png$`)
 	m := pngPath.FindStringSubmatch(path)
-	// NOTE: Check that length is 3 (full string match, path to project, short name of sprite)
+	// len should be 3 (full string match, path to project, short name of sprite)
 	if len(m) != 3 {
 		return nil, fmt.Errorf("invalid path: %s", path)
 	}
