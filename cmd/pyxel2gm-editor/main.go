@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"log"
 	"os"
 	"os/exec"
@@ -25,29 +26,20 @@ import (
 )
 
 func main() {
-
-	/*
-
-		f, err := os.OpenFile("testlogfile", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-		if err != nil {
-			t.Fatalf("error opening file: %v", err)
-		}
-		defer f.Close()
-
-		log.SetOutput(f)
-		log.Println("This is a test log entry")
-	*/
-
 	// Split the path provided into projectPath and name.
 	if len(os.Args) != 2 {
+		log.Fatal(fmt.Sprintf("Invalid number of arguments"))
 		return
 	}
 	parts, err := gm.SplitSpritePath(os.Args[1])
 	if err != nil {
+		log.Fatal(err)
 		panic(err)
 	}
 	projectPath := parts[0]
-	shortName := parts[1]
+	imageDir := parts[1]
+	shortName := parts[2]
+
 	logfile := fmt.Sprintf("%s\\pyxel2gm-editor.log", projectPath)
 	f, err := os.OpenFile(logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -57,27 +49,39 @@ func main() {
 	log.SetOutput(f)
 
 	// Find the .pyxel file associated with the provided name.
-	assetsDirName := "assets"
-	searchPath := fmt.Sprintf("%s\\%s", projectPath, assetsDirName)
+	assetsDir := fmt.Sprintf("assets\\%s", imageDir)
+	searchPath := fmt.Sprintf("%s\\%s", projectPath, assetsDir)
 	pyxelDir, err := pyxel.FindAsset(searchPath, shortName)
-	if _, ok := err.(pyxel.FileNotFound); ok {
-		// TODO: GetTiles might need to know if this is a sprite or background.
-		tiles, err := gm.GetTiles(projectPath, shortName)
+	imagePath := fmt.Sprintf("%s\\%s\\images", projectPath, imageDir)
+
+	if _, notFound := err.(pyxel.FileNotFound); notFound {
+		// A pyxel file was not found, create one from GM images.
+		var tiles []*image.Image
+		switch imageDir {
+		case "sprites":
+			// Look for tiles that fit the format '{shortName}_{N}'
+			tiles, err = gm.GetImages(imagePath, fmt.Sprintf("%s_", shortName))
+		case "background":
+			tiles, err = gm.GetImages(imagePath, shortName)
+		default:
+			err = fmt.Errorf("invalid imageDir: %s", imageDir)
+		}
 		if err != nil {
 			log.Fatal(err)
+		}
+		if len(tiles) <= 0 {
+			log.Fatal("no images found")
 		}
 		pyxelDir = searchPath
 		err = pyxel.Create(pyxelDir, shortName, tiles)
 		if err != nil {
 			log.Fatal(err)
 		}
-	} else if err != nil {
-		log.Fatal(err)
+
 	}
 
 	// Open the .pyxel file with the default program (this should be Pyxel Edit).
 	pyxelFile := fmt.Sprintf("%s\\%s.pyxel", pyxelDir, shortName)
-	log.Println(pyxelFile)
 	openCMD := fmt.Sprintf("/K %s", pyxelFile)
 	cmd := exec.Command("cmd", openCMD)
 	err = cmd.Start()
@@ -89,8 +93,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Export tiles in the .pyxel file into the project as .png.
-	err = pyxel.ExportTiles(pyxelDir, shortName, projectPath)
+	// Export images in the .pyxel file into the project as .png.
+	switch imageDir {
+	case "sprites":
+		// Sprites should export the tileset as images.
+		err = pyxel.ExportTiles(pyxelDir, imagePath, shortName)
+	case "background":
+		// Backgrounds should export the layers as a single image.
+		err = pyxel.ExportLayers(pyxelDir, imagePath, shortName)
+	default:
+		err = fmt.Errorf("invalid imageDir: %s", imageDir)
+	}
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -28,22 +28,27 @@ import (
 // SplitSpritePath and return the Game Maker Studio project path, and
 // sprite filename (excluding the index and extension).
 func SplitSpritePath(path string) ([]string, error) {
-	// TODO: fix this to work with backgrounds.
-	var pngPath = regexp.MustCompile(`^(.*)[\\/]sprites[\\/]images[\\/](.*)_[0-9]+.png$`)
-	m := pngPath.FindStringSubmatch(path)
-	// len should be 3 (full string match, path to project, short name of sprite)
-	if len(m) != 3 {
-		return nil, fmt.Errorf("invalid path: %s", path)
+	var spritePath = regexp.MustCompile(`^(.*)[\\/](sprites)[\\/]images[\\/](.*)_[0-9]+.png$`)
+	m := spritePath.FindStringSubmatch(path)
+	// len should be 3 (full string match, projectPath, shortName)
+	if len(m) != 4 {
+		// Provided path does not match a sprite, check for a background.
+		var bgPath = regexp.MustCompile(`^(.*)[\\/](background)[\\/]images[\\/](.*).png$`)
+		m = bgPath.FindStringSubmatch(path)
+		if len(m) != 4 {
+			return nil, fmt.Errorf("path does not match: %s", path)
+		}
 	}
-	return []string{m[1], m[2]}, nil
+	projectPath := m[1]
+	imageDir := m[2]
+	shortName := m[3]
+	return []string{projectPath, imageDir, shortName}, nil
 }
 
-// GetTiles from sprite returning a slice of Image pointers.
-func GetTiles(projectPath, name string) ([]*image.Image, error) {
+// GetImages from sprite returning a slice of Image pointers.
+func GetImages(imagesPath, name string) ([]*image.Image, error) {
 	tiles := []*image.Image{}
-	// TODO: make this work for sprites and backgrounds
-	p := fmt.Sprintf("%s\\sprites\\images", projectPath)
-	fileList, err := ioutil.ReadDir(p)
+	fileList, err := ioutil.ReadDir(imagesPath)
 	if err != nil {
 		return tiles, nil
 	}
@@ -52,7 +57,7 @@ func GetTiles(projectPath, name string) ([]*image.Image, error) {
 		if !strings.HasPrefix(f.Name(), name) {
 			continue
 		}
-		fp := fmt.Sprintf("%s\\%s", p, f.Name())
+		fp := fmt.Sprintf("%s\\%s", imagesPath, f.Name())
 		img, err := readImage(fp)
 		if err != nil {
 			return nil, err
