@@ -38,60 +38,12 @@ func (f FileNotFound) Error() string {
 	return fmt.Sprintf("pyxel2gm: could not locate %s under %s", f.ShortName, f.SearchPath)
 }
 
-// ExportTiles from file at pyxelPath into projectPath.
-func ExportTiles(pyxelPath, pyxelName, projectPath string) error {
-	fullpath := fmt.Sprintf("%s\\%s.pyxel", pyxelPath, pyxelName)
-	z, err := zip.OpenReader(fullpath)
-	if err != nil {
-		return err
-	}
-	defer z.Close()
-
-	// TODO: make this work with sprites and backgrounds.
-	path := fmt.Sprintf("%s\\sprites\\images", projectPath)
-	// TODO: Make the directory if it does not exist
-	// err = os.MkdirAll(path, 0777)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// Iterate through files in the archive.
-	var tileName = regexp.MustCompile(`^tile([0-9]+)\.png$`)
-	for _, zf := range z.File {
-		if tileName.MatchString(zf.Name) {
-			i := tileName.FindStringSubmatch(zf.Name)[1]
-			name := fmt.Sprintf("%s_%s.png", pyxelName, i)
-			filepath := fmt.Sprintf("%s\\%s", path, name)
-
-			gmf, err := os.Create(filepath)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-
-			rc, err := zf.Open()
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			_, err = io.Copy(gmf, rc)
-			if err != nil {
-				log.Fatal(err)
-			}
-			rc.Close()
-
-			gmf.Close()
-		}
-	}
-
-	return nil
-}
-
 // Create pyxel file from tiles.
 func Create(createPath, shortName string, tiles []*image.Image) error {
 	if len(tiles) < 1 {
 		return fmt.Errorf("can not create image with no tiles")
 	}
+
 	// Create the archive.
 	// TODO: use path utils for this.
 	filepath := fmt.Sprintf("%s\\%s.pyxel", createPath, shortName)
@@ -107,22 +59,62 @@ func Create(createPath, shortName string, tiles []*image.Image) error {
 	if err != nil {
 		return err
 	}
-	// Add Layer to archive.
-	layerWidth, layerHeight, err := createLayer(w, tileWidth, tileHeight)
+
+	// Add Layers to archive.
+	layerCount, layerWidth, layerHeight, err := createLayers(w, tiles)
 	if err != nil {
 		return err
 	}
+
 	// Add docData.json to archive.
-	err = createDocData(w, tileCount, tileWidth, tileHeight, 0, layerWidth, layerHeight)
+	err = createDocData(w, tileCount, tileWidth, tileHeight, layerCount, layerWidth, layerHeight)
 	if err != nil {
 		return err
 	}
+
 	err = w.Close()
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// createLayers by adding a blank png of widthxheight to the zip archive.
+func createLayers(w *zip.Writer, tiles []*image.Image) (int, int, int, error) {
+	filename := fmt.Sprintf("layer0.png")
+	count := 1
+	tileWidth := 0
+	tileHeight := 0
+	width := 0
+	height := 0
+	for i, img := range tiles {
+		if i == 0 {
+			b := (*img).Bounds()
+			tileWidth = b.Min.X + b.Max.X
+			tileHeight = b.Min.Y + b.Max.Y
+		}
+
+		if len(tiles) == 1 {
+			width = tileWidth
+			height = tileHeight
+		} else {
+			width = tileWidth * 5
+			height = tileHeight * 5
+		}
+
+		f, err := w.Create(filename)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		imgRect := image.Rect(0, 0, width, height)
+		img := image.NewRGBA(imgRect)
+		err = png.Encode(f, img)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+	}
+	return count, width, height, nil
 }
 
 func createDocData(w *zip.Writer, tileCount, tileWidth, tileHeight, layerCount, layerWidth, layerHeight int) error {
@@ -248,25 +240,6 @@ func createDocData(w *zip.Writer, tileCount, tileWidth, tileHeight, layerCount, 
 	return nil
 }
 
-// createLayer by adding a blank png of widthxheight to the zip archive.
-func createLayer(w *zip.Writer, tileWidth, tileHeight int) (int, int, error) {
-	filename := fmt.Sprintf("layer0.png")
-	width := tileWidth * 5
-	height := tileHeight * 5
-	f, err := w.Create(filename)
-	if err != nil {
-		return 0, 0, err
-	}
-	imgRect := image.Rect(0, 0, width, height)
-	img := image.NewRGBA(imgRect)
-	//draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.ZP, draw.Src)
-	err = png.Encode(f, img)
-	if err != nil {
-		return 0, 0, err
-	}
-	return width, height, nil
-}
-
 // createTiles by adding them to the zip archive and return tile count.
 func createTiles(w *zip.Writer, tiles []*image.Image) (int, int, int, error) {
 	count := 0
@@ -322,4 +295,99 @@ func FindAsset(searchPath, shortName string) (string, error) {
 		}
 	}
 	return "", FileNotFound{SearchPath: searchPath, ShortName: shortName}
+}
+
+// ExportTiles from file at pyxelPath into projectPath.
+func ExportTiles(pyxelPath, imagePath, shortName string) error {
+	// TODO: pass assetPath to this.
+	fullpath := fmt.Sprintf("%s\\%s.pyxel", pyxelPath, shortName)
+	z, err := zip.OpenReader(fullpath)
+	if err != nil {
+		return err
+	}
+	defer z.Close()
+
+	// TODO: Make the directory if it does not exist
+	// err = os.MkdirAll(path, 0777)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// Iterate through files in the archive.
+	var tileName = regexp.MustCompile(`^tile([0-9]+)\.png$`)
+	for _, zf := range z.File {
+		if tileName.MatchString(zf.Name) {
+			i := tileName.FindStringSubmatch(zf.Name)[1]
+			name := fmt.Sprintf("%s_%s.png", shortName, i)
+			filepath := fmt.Sprintf("%s\\%s", imagePath, name)
+
+			gmf, err := os.Create(filepath)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			rc, err := zf.Open()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			_, err = io.Copy(gmf, rc)
+			if err != nil {
+				log.Fatal(err)
+			}
+			rc.Close()
+
+			gmf.Close()
+		}
+	}
+
+	return nil
+}
+
+// ExportLayers from file at pyxelPath into projectPath.
+func ExportLayers(pyxelPath, imagePath, shortName string) error {
+	// TODO: pass assetPath to this.
+	fullpath := fmt.Sprintf("%s\\%s.pyxel", pyxelPath, shortName)
+	z, err := zip.OpenReader(fullpath)
+	if err != nil {
+		return err
+	}
+	defer z.Close()
+
+	// TODO: Make the directory if it does not exist
+	// err = os.MkdirAll(path, 0777)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// Iterate through files in the archive.=
+	var tileName = regexp.MustCompile(`^layer0.png$`)
+	for _, zf := range z.File {
+		if tileName.MatchString(zf.Name) {
+			name := fmt.Sprintf("%s.png", shortName)
+			filepath := fmt.Sprintf("%s\\%s", imagePath, name)
+
+			gmf, err := os.Create(filepath)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			rc, err := zf.Open()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			_, err = io.Copy(gmf, rc)
+			if err != nil {
+				log.Fatal(err)
+			}
+			rc.Close()
+
+			gmf.Close()
+		}
+	}
+
+	return nil
 }

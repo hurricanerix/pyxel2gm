@@ -20,27 +20,36 @@ import (
 )
 
 func TestSplitPath(t *testing.T) {
-	projectPath := "C:\\Users\\foo\\Documents\\GameMaker\\Projects\\Test.gmx"
-	filename := "spr_test"
-	path := fmt.Sprintf("%s\\sprites\\images\\%s_0.png", projectPath, filename)
+	files := []string{
+		"background\\images\\%s.png",
+		"sprites\\images\\%s_0.png",
+		"sprites\\images\\%s_10.png",
+	}
 
-	parts, err := SplitSpritePath(path)
-	if err != nil {
-		t.Errorf("error returned")
-	}
-	if parts == nil {
-		t.Errorf("SplitPath returned parts as nil")
-		return
-	}
-	if len(parts) != 2 {
-		t.Errorf("invalid length of parts: %d, expected 2", len(parts))
-		return
-	}
-	if parts[0] != projectPath {
-		t.Errorf("projectPath returned \"%s\", expected \"%s\"", parts[0], projectPath)
-	}
-	if parts[1] != filename {
-		t.Errorf("filename returned \"%s\", expected \"%s\"", parts[1], filename)
+	for _, f := range files {
+		projectPath := "C:\\Users\\foo\\Documents\\GameMaker\\Projects\\Test.gmx"
+		shortName := "spr_test"
+		filename := fmt.Sprintf(f, shortName)
+		path := fmt.Sprintf("%s\\%s", projectPath, filename)
 
+		parts, err := SplitSpritePath(path)
+		if err != nil {
+			t.Errorf("(%s) error returned: %s", filename, err.Error())
+		}
+		if parts == nil {
+			t.Errorf("(%s) SplitPath returned parts as nil", filename)
+			return
+		}
+		if len(parts) != 2 {
+			t.Errorf("(%s) invalid length of parts: %d, expected 2", filename, len(parts))
+			return
+		}
+		if parts[0] != projectPath {
+			t.Errorf("(%s) projectPath returned \"%s\", expected \"%s\"", filename, parts[0], projectPath)
+		}
+		if parts[1] != shortName {
+			t.Errorf("(%s) filename returned \"%s\", expected \"%s\"", filename, parts[1], shortName)
+
+		}
 	}
 }
